@@ -1,0 +1,6 @@
+[IDLIST]
+[KJK_ARD]LED@ON // 빌트인 13번 켜라
+[KJK_ARD]LAMP@ON // D3 핀 LED
+[KJK_ARD]SERVO@ON // D5 servo
+[KJK_ARD]GETSENSOR@5  // 하면 5초마다 데이터 보내줌(조도, 온습도 ...)
+	[KJK_ARD]GETSENSOR@0 // 꺼짐
