@@ -65,8 +65,6 @@ long duration, distance; // 펄스 시간, 거리 측정용 변수
 // 서보
 int angle;
 
-// int doorOpenTimeCnt = 0;
-// char isDoorOpened = 0;
 
 // DHT dht(DHTPIN, DHTTYPE);
 
@@ -96,8 +94,8 @@ void setup()
   // dht.begin();
 
   // 서보
-  #define DOOR_OPEN 90
-  #define DOOR_CLOSE 0
+  #define DOOR_CLOSE 90
+  #define DOOR_OPEN 0
   myservo.attach(SERVO_PIN);
   myservo.write(DOOR_CLOSE); // 서보 모터가 움직일 각도
   myservoTime = secCount; // 2초 뒤 디태치하여, 흔들림 제거
@@ -127,10 +125,6 @@ void loop()
   if (timerIsrFlag)
   {
     timerIsrFlag = false;
-
-    // if (isDoorOpened) doorOpenTimeCnt++;
-    // else if (!isDoorOpened) doorOpenTimeCnt = 0;
-
 
     // 조도, 온도, 습도 CLCD에 쓰기 & 블루투스로 보내기
 //     cds = map(analogRead(CDS_PIN), 0, 1023, 0, 100);
@@ -171,16 +165,14 @@ void loop()
       sprintf(sendBuf, "[%s]SERVO@%d\n", recvId, angle);
       BTSerial.write(sendBuf, strlen(sendBuf));
     }
+    else if (angle == DOOR_CLOSE) { // 문 닫힘 알림 => 90도
+      sprintf(sendBuf, "[%s]SERVO@%d\n", recvId, angle);
+      BTSerial.write(sendBuf, strlen(sendBuf));
+    }
 
     
-    // if ( doorOpenTimeCnt % 10 == 0) { // 10초 동안 문 열려 있으면 자동닫기
-    //   Serial.println(doorOpenTimeCnt);
-    //   myservo.attach(SERVO_PIN);
-    //   angle = DOOR_CLOSE;
-    //   myservo.write(DOOR_CLOSE);
-    // }
 
-    // 초음파
+    // 초음파    
     if (1) {
       digitalWrite(trigPin, LOW); 
       delayMicroseconds(2); 
@@ -194,7 +186,7 @@ void loop()
       // 측정된 시간을 cm로 환산
       distance = duration/58.2;
       
-      if (distance >= maximumRange || distance <= minimumRange)
+      if (distance >= maximumRange || distance <= minimumRange)  // 16 이상은 문 닫힌것, 7이하는 문 열린것
       {
         Serial.println("out of range");
       }
@@ -203,22 +195,26 @@ void loop()
         Serial.println(distance);
       }
 
-      if ( distance > 3 ) {
-        // 문 열림
-        // isDoorOpened = 1;
-        
+      if (!(secCount % 5)) //5초에 한번씩 실행
+      {
+        if ( distance < 10 ) { // 5초동안 문 열려있으면 닫기
+          // 문 열림
+          sprintf(lcdLine2, "%s", "Door Open!");
+          lcdDisplay(0, 1, lcdLine2);
 
-        // if (myservo.read() > DOOR_CLOSE) { // 1초마다 동작하기 때문에 명령어로 
-        //   myservo.attach(SERVO_PIN);
-        //   angle = DOOR_CLOSE;
-        //   myservo.write(DOOR_CLOSE);
-        // }
-      }
-      // else {
-      //   isDoorOpened = 0;
-      // }
+          sprintf(sendBuf, "[%s]DOOR@%s\n", recvId, "OPENED"); // 문 열림
+          BTSerial.write(sendBuf);
+
+          doorClose();
+
+          
+
+        }
+      }  
 
     }
+    // End 초음파
+
 
   }
   // End 1초마다 실행할 내용
@@ -315,12 +311,12 @@ void bluetoothEvent()
     myservoTime = secCount;
     
     if ( !strcmp(pArray[2], "ON") ) {
-      angle = DOOR_OPEN;
-      myservo.write(DOOR_OPEN);
-    }      
-    else if ( !strcmp(pArray[2], "Off") ) {
       angle = DOOR_CLOSE;
       myservo.write(DOOR_CLOSE);
+    }      
+    else if ( !strcmp(pArray[2], "Off") ) {
+      angle = DOOR_OPEN;
+      myservo.write(DOOR_OPEN);
     }
     
     sprintf(sendBuf, "[%s]%s@%s\n", pArray[0], pArray[1], pArray[2]);
@@ -378,6 +374,18 @@ boolean debounce(boolean last)
   return current;       // 버튼의 현재 상태 반환
 }
 
+
+void doorClose() {
+  myservo.attach(SERVO_PIN);
+  myservo.write(DOOR_CLOSE); 
+  
+  delay(50);
+  // if (myservo.attached() && myservoTime + 2 == secCount) {
+    myservo.detach(); // 서보 전원 차단(흔들림, 노이즈 차단)
+  // }
+}
+
+
 /**
 RFID
  * Helper routine to dump a byte array as hex values to Serial. 
@@ -422,6 +430,10 @@ void getRfidId() {
   getCardIdCharArray(rfid.uid.uidByte, rfid.uid.size);
   int speakerPin = 6;
   if ( !strcmp(rfid_id, cardUid) ) {
+    myservo.attach(SERVO_PIN);
+    myservo.write(DOOR_OPEN);
+    
+
     sprintf(lcdLine2,"%s", "Door Open!");
     lcdDisplay(0, 1, lcdLine2);
 
@@ -433,6 +445,11 @@ void getRfidId() {
       delay(100);
     }
     noTone(speakerPin);
+
+    // if (myservo.attached() && myservoTime + 2 == secCount) // 서보 모터 구동한지 2초 지나면
+    // {
+      myservo.detach(); // 서보 전원 차단(흔들림, 노이즈 차단)
+    // }
 
   } 
   else {
@@ -467,3 +484,5 @@ void getRfidId() {
   // Stop encryption on PCD
   rfid.PCD_StopCrypto1();
 }
+
+
